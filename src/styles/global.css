@@ -1,0 +1,4 @@
+@import "tailwindcss";
+/* optional helpers */
+html { scroll-behavior: smooth; }
+[id] { scroll-margin-top: 88px; }
