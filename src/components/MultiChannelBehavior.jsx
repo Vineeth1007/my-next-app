@@ -250,7 +250,7 @@ export function MultiChannelBehavior() {
               <Sparkles size={18} />
             </div>
             <span className="text-sm font-semibold tracking-tight text-slate-900">
-              OmniComms AI
+              Nexa AI
             </span>
           </a>
           <nav className="hidden items-center gap-6 text-sm text-slate-600 md:flex">
