@@ -1,6 +1,8 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST")
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
+  }
 
   const key = (process.env.OPENROUTER_API_KEY || "").trim();
   if (!key)
@@ -11,16 +13,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "context (string) is required" });
   }
 
-  // Minimal “preset” mapping like your JSX
   const preset =
     {
       gmail:
-        "Write a professional email with a clear subject, greeting, structured paragraphs, and a polite closing.",
+        "Write a professional email with clear subject, greeting, paragraphs, and polite closing.",
       slack:
         "Write a concise Slack message with bullets and next steps. No formal greeting.",
       whatsapp:
         "Write a casual WhatsApp reply, short and friendly. Emojis allowed.",
-      other: "Write an adaptive message appropriate for the platform.",
+      other: "Write a clear message appropriate for the platform.",
     }[platform] || "Write a clear message appropriate for the platform.";
 
   const prompt = [
@@ -50,11 +51,11 @@ export default async function handler(req, res) {
     });
 
     const text = await resp.text();
-    if (!resp.ok) {
+    if (!resp.ok)
       return res
         .status(resp.status)
         .json({ error: `OpenRouter: ${text.slice(0, 500)}` });
-    }
+
     const json = JSON.parse(text);
     const preview = json?.choices?.[0]?.message?.content || "";
     return res.status(200).json({ preview });

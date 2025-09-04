@@ -220,9 +220,12 @@ export function MultiChannelBehavior() {
   const [input, setInput] = useState(
     "Summarize this week’s progress and propose next steps for the integration."
   );
+
+  // NEW: explicit generate snapshot state
+  const [generatedPreview, setGeneratedPreview] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Independent previews
   const previewPresets = useMemo(
     () => formatReply({ platform: platformPresets, prompt: input }),
     [platformPresets, input]
@@ -231,6 +234,29 @@ export function MultiChannelBehavior() {
     () => formatReply({ platform: platformPlayground, prompt: input }),
     [platformPlayground, input]
   );
+
+  const handleGenerate = async () => {
+    try {
+      setIsGenerating(true);
+      const r = await fetch("/api/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: input, platform: platformPlayground }),
+      });
+
+      const ct = r.headers.get("content-type") || "";
+      const payload = ct.includes("application/json")
+        ? await r.json()
+        : { error: await r.text() };
+
+      if (!r.ok) throw new Error(payload?.error || `HTTP ${r.status}`);
+      setGeneratedPreview(payload.preview || "");
+    } catch (err) {
+      setGeneratedPreview(`(Failed to generate)\n${String(err)}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const tabs = [
     { key: "gmail", label: "Gmail", meta: PLATFORM_META.gmail },
@@ -504,26 +530,29 @@ export function MultiChannelBehavior() {
           <SectionTitle
             eyebrow="Playground"
             title="Try the tone engine"
-            subtitle="Type a request and preview platform‑specific replies in real time."
+            subtitle="Type a request and preview platform-specific replies in real time."
           />
         </AnimatedInView>
+
         <AnimatedInView delay={0.05}>
           <Card className="mt-6 p-5">
             <div className="flex flex-col gap-5 md:flex-row">
+              {/* LEFT */}
               <div className="w-full md:w-1/2">
                 <p className="text-sm font-medium text-slate-700">
                   Tone Playground
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
-                  Type any request and preview how the reply changes per
-                  platform.
+                  Type the context. Pick a platform. Click{" "}
+                  <strong>Generate</strong> to update the preview on the right.
                 </p>
+
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {tabs.map((t) => (
                     <button
                       key={t.key}
                       onClick={() => setPlatformPlayground(t.key)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition  ${
                         platformPlayground === t.key
                           ? "bg-indigo-600 text-white ring-indigo-600"
                           : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50"
@@ -534,19 +563,53 @@ export function MultiChannelBehavior() {
                     </button>
                   ))}
                 </div>
+
                 <textarea
                   className="mt-4 h-40 w-full rounded-xl border border-slate-300 bg-white/70 p-3 text-sm shadow-inner outline-none transition focus:ring-2 focus:ring-indigo-200"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type a message to preview"
+                  placeholder="Describe the email/message you want (context only)"
                 />
+
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" />
+                        Generating…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} />
+                        Generate
+                      </>
+                    )}
+                  </button>
+
+                  {generatedPreview && (
+                    <button
+                      onClick={() => setGeneratedPreview(null)}
+                      className="text-xs rounded-xl border border-slate-300 px-3 py-1.5 transition hover:bg-slate-50"
+                      title="Clear snapshot and return to live mode"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* RIGHT */}
               <div className="w-full md:w-1/2">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-slate-700">Preview</p>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(preview);
+                      const textToCopy = generatedPreview ?? previewPlayground;
+                      navigator.clipboard.writeText(textToCopy);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1200);
                     }}
@@ -563,16 +626,15 @@ export function MultiChannelBehavior() {
                     )}
                   </button>
                 </div>
+
                 <pre className="mt-3 h-56 w-full overflow-auto rounded-xl bg-slate-900 p-4 text-[12px] leading-relaxed text-slate-100">
-                  {previewPlayground}
+                  {generatedPreview ?? previewPlayground}
                 </pre>
+
                 <p className="mt-3 text-xs text-slate-500">
-                  Currently, only{" "}
-                  <span className="font-semibold text-slate-700">
-                    Gmail integration
-                  </span>{" "}
-                  is active. Slack, WhatsApp, and other platforms will follow
-                  the same behavior rules once enabled.
+                  Live preview updates as you type. Clicking{" "}
+                  <strong>Generate</strong> takes a snapshot; use <em>Reset</em>{" "}
+                  to go back to live mode.
                 </p>
               </div>
             </div>
