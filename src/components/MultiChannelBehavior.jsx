@@ -234,6 +234,23 @@ export function MultiChannelBehavior() {
     () => formatReply({ platform: platformPlayground, prompt: input }),
     [platformPlayground, input]
   );
+  // focus mode: when typing in Gmail
+  const [isFocusMode, setIsFocusMode] = useState(false);
+
+  // mobile toast (desktop recommended)
+  const [showMobileHint, setShowMobileHint] = useState(false);
+
+  // show toast only on small screens, once
+  useEffect(() => {
+    const el = document.documentElement; // or document.body
+    if (isFocusMode) {
+      const prev = el.style.overflow;
+      el.style.overflow = "hidden";
+      return () => {
+        el.style.overflow = prev;
+      };
+    }
+  }, [isFocusMode]);
   // Disable backend generate for non-gmail
   const isComingSoon = platformPlayground !== "gmail";
 
@@ -253,6 +270,15 @@ export function MultiChannelBehavior() {
       })
     : generatedPreview ?? previewPlayground;
 
+  const handleTyping = (val) => {
+    setInput(val);
+    if (platformPlayground === "gmail" && val.trim().length > 0) {
+      setIsFocusMode(true);
+    }
+  };
+  const handleDone = () => {
+    setIsFocusMode(false);
+  };
   const handleGenerate = async () => {
     try {
       setIsGenerating(true);
@@ -283,7 +309,31 @@ export function MultiChannelBehavior() {
     { key: "other", label: "Other", meta: PLATFORM_META.other },
   ];
   const heroGradient = "bg-gradient-to-b from-indigo-50 via-white to-white";
-
+  {
+    /* Mobile hint: Use desktop for best experience */
+  }
+  {
+    showMobileHint && (
+      <motion.div
+        initial={{ y: -60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -60, opacity: 0 }}
+        transition={{ duration: 0.4 }}
+        className="md:hidden fixed left-1/2 top-3 z-[60] -translate-x-1/2"
+      >
+        <div className="flex items-center gap-3 rounded-full bg-slate-900/90 px-4 py-2 text-xs text-white shadow-lg backdrop-blur">
+          <span className="inline-flex h-2 w-2 rounded-full bg-amber-400" />
+          <span>Best experienced on desktop for wider preview.</span>
+          <button
+            onClick={() => setShowMobileHint(false)}
+            className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] hover:bg-white/10"
+          >
+            Got it
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
   return (
     <div className={`min-h-screen ${heroGradient} text-slate-800`}>
       {/* Nav */}
@@ -543,7 +593,10 @@ export function MultiChannelBehavior() {
       </section>
 
       {/* Playground */}
-      <section id="playground" className="mx-auto max-w-6xl px-4 py-12">
+      <section
+        id="playground"
+        className="mx-auto max-w-6xl px-4 py-12 relative"
+      >
         <AnimatedInView>
           <SectionTitle
             eyebrow="Playground"
@@ -552,122 +605,153 @@ export function MultiChannelBehavior() {
           />
         </AnimatedInView>
 
-        <AnimatedInView delay={0.05}>
-          <Card className="mt-6 p-5">
-            <div className="flex flex-col gap-5 md:flex-row">
-              {/* LEFT */}
-              <div className="w-full md:w-1/2">
-                <p className="text-sm font-medium text-slate-700">
-                  Tone Playground
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Type the context. Pick a platform. Click{" "}
-                  <strong>Generate</strong> to get an AI draft.
-                </p>
+        {/* GLOBAL BACKDROP: sits behind the zoomed block */}
+        {isFocusMode && (
+          <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"></div>
+        )}
 
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  {tabs.map((t) => (
+        <AnimatedInView delay={0.05}>
+          {/* Make this wrapper the zoomed layer */}
+          <motion.div
+            className="relative z-50" // above the backdrop
+            animate={isFocusMode ? { scale: 1.4 } : { scale: 1 }}
+            transition={{ type: "spring", stiffness: 150, damping: 20 }}
+            style={{ transformOrigin: "top center" }}
+          >
+            <Card className="mt-6 p-5">
+              <div className="flex flex-col gap-5 md:flex-row">
+                {/* LEFT: controls */}
+                <div className="w-full md:w-1/2">
+                  <p className="text-sm font-medium text-slate-700">
+                    Tone Playground
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Type the context. Pick a platform. Click{" "}
+                    <strong>Generate</strong> to get an AI draft.
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {tabs.map((t) => (
+                      <button
+                        key={t.key}
+                        onClick={() => {
+                          setPlatformPlayground(t.key);
+                          if (t.key !== "gmail") setIsFocusMode(false); // leave focus when switching away
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition  ${
+                          platformPlayground === t.key
+                            ? "bg-indigo-600 text-white ring-indigo-600"
+                            : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50"
+                        }`}
+                        aria-pressed={platformPlayground === t.key}
+                      >
+                        <t.meta.icon className="h-3.5 w-3.5" /> {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    className="mt-4 h-40 w-full rounded-xl border border-slate-300 bg-white/70 p-3 text-sm shadow-inner outline-none transition focus:ring-2 focus:ring-indigo-200"
+                    value={input}
+                    onChange={(e) => handleTyping(e.target.value)}
+                    placeholder="Describe the email/message you want (context only)"
+                    disabled={isComingSoon}
+                  />
+
+                  <div className="mt-3 flex items-center gap-2">
+                    {/* Generate (enabled only for Gmail) */}
                     <button
-                      key={t.key}
-                      onClick={() => setPlatformPlayground(t.key)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition  ${
-                        platformPlayground === t.key
-                          ? "bg-indigo-600 text-white ring-indigo-600"
-                          : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50"
+                      onClick={handleGenerate}
+                      disabled={isComingSoon || isGenerating}
+                      title={
+                        isComingSoon
+                          ? "Switch to Gmail to generate with AI"
+                          : "Generate AI preview"
+                      }
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60 ${
+                        isComingSoon
+                          ? "bg-slate-400"
+                          : "bg-indigo-600 hover:bg-indigo-700"
                       }`}
-                      aria-pressed={platformPlayground === t.key}
                     >
-                      <t.meta.icon className="h-3.5 w-3.5" /> {t.label}
+                      {isGenerating ? (
+                        <>
+                          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" />
+                          Generating…
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} />
+                          Generate
+                        </>
+                      )}
                     </button>
-                  ))}
+
+                    {/* DONE appears only in Gmail focus mode */}
+                    {isFocusMode && platformPlayground === "gmail" && (
+                      <button
+                        onClick={handleDone}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                        title="Exit focus mode"
+                      >
+                        Done
+                      </button>
+                    )}
+
+                    {isComingSoon && (
+                      <span className="text-xs rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800 ring-1 ring-amber-200">
+                        Slack / WhatsApp / Other — Coming soon
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <textarea
-                  className="mt-4 h-40 w-full rounded-xl border border-slate-300 bg-white/70 p-3 text-sm shadow-inner outline-none transition focus:ring-2 focus:ring-indigo-200"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Describe the email/message you want (context only)"
-                  disabled={isComingSoon}
-                />
+                {/* RIGHT: preview */}
+                <div className="w-full md:w-1/2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-slate-700">
+                      Preview
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(previewForDisplay);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1200);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white shadow hover:bg-slate-800"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" /> Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" /> Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
 
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    onClick={handleGenerate}
-                    disabled={isGenerating || isComingSoon}
-                    title={
-                      isComingSoon
-                        ? "Switch to Gmail to generate with AI"
-                        : "Generate AI preview"
-                    }
-                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60 ${
-                      isComingSoon
-                        ? "bg-slate-400"
-                        : "bg-indigo-600 hover:bg-indigo-700"
-                    }`}
-                  >
-                    {isGenerating ? (
-                      <>
-                        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" />
-                        Generating…
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={16} />
-                        Generate
-                      </>
-                    )}
-                  </button>
+                  <pre className="mt-3 h-56 w-full overflow-auto rounded-xl bg-slate-900 p-4 text-[12px] leading-relaxed text-slate-100">
+                    {previewForDisplay}
+                  </pre>
 
-                  {isComingSoon && (
-                    <span className="text-xs rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800 ring-1 ring-amber-200">
-                      Slack / WhatsApp / Other — Coming soon
-                    </span>
+                  {platformPlayground !== "gmail" ? (
+                    <p className="mt-3 text-xs text-amber-700">
+                      <strong>Coming soon:</strong> full AI generation for{" "}
+                      {platformPlayground} will be enabled here.
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-500">
+                      Live preview updates as you type. Click{" "}
+                      <strong>Generate</strong> to fetch an AI draft. Use{" "}
+                      <strong>Done</strong> to return to normal view.
+                    </p>
                   )}
                 </div>
               </div>
-
-              {/* RIGHT */}
-              <div className="w-full md:w-1/2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-700">Preview</p>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(previewForDisplay);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1200);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white shadow hover:bg-slate-800"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" /> Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" /> Copy
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <pre className="mt-3 h-56 w-full overflow-auto rounded-xl bg-slate-900 p-4 text-[12px] leading-relaxed text-slate-100">
-                  {previewForDisplay}
-                </pre>
-
-                {isComingSoon ? (
-                  <p className="mt-3 text-xs text-amber-700">
-                    <strong>Coming soon:</strong> full AI generation for{" "}
-                    {platformPlayground} will be enabled here.
-                  </p>
-                ) : (
-                  <p className="mt-3 text-xs text-slate-500">
-                    Live preview updates as you type. Click{" "}
-                    <strong>Generate</strong> to fetch an AI draft.
-                  </p>
-                )}
-              </div>
-            </div>
-          </Card>
+            </Card>
+          </motion.div>
         </AnimatedInView>
       </section>
 
