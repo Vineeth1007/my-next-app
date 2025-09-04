@@ -1,6 +1,6 @@
 // src/pages/index.jsx
 import React from "react";
-import MultiChannelBehavior from "@/components/MultiChannelBehavior";
+import { MultiChannelBehavior } from "../components/MultiChannelBehavior";
 import ActionBridge from "@/components/ActionBridge";
 // import "@/styles/global.css";
 

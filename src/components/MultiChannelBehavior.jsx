@@ -211,7 +211,7 @@ function useSmoothScroll() {
 }
 
 // Main
-export default function MultiChannelBehavior() {
+export function MultiChannelBehavior() {
   useSmoothScroll();
 
   // Separate selections for each section
