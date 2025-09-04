@@ -234,6 +234,24 @@ export function MultiChannelBehavior() {
     () => formatReply({ platform: platformPlayground, prompt: input }),
     [platformPlayground, input]
   );
+  // Disable backend generate for non-gmail
+  const isComingSoon = platformPlayground !== "gmail";
+
+  // Sample contexts to show when coming soon
+  const sampleContextByPlatform = {
+    slack: "Share today's standup update with quick bullets and blockers.",
+    whatsapp: "Tell a friend you'll reach the venue in 10 minutes.",
+    other: "Give a two-line summary tailored to this platform.",
+  };
+
+  // What to show in the right-side preview box
+  const previewForDisplay = isComingSoon
+    ? formatReply({
+        platform: platformPlayground,
+        prompt:
+          sampleContextByPlatform[platformPlayground] || "Give a short update.",
+      })
+    : generatedPreview ?? previewPlayground;
 
   const handleGenerate = async () => {
     try {
@@ -544,7 +562,7 @@ export function MultiChannelBehavior() {
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   Type the context. Pick a platform. Click{" "}
-                  <strong>Generate</strong> to update the preview on the right.
+                  <strong>Generate</strong> to get an AI draft.
                 </p>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -569,13 +587,23 @@ export function MultiChannelBehavior() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Describe the email/message you want (context only)"
+                  disabled={isComingSoon}
                 />
 
                 <div className="mt-3 flex items-center gap-2">
                   <button
                     onClick={handleGenerate}
-                    disabled={isGenerating}
-                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                    disabled={isGenerating || isComingSoon}
+                    title={
+                      isComingSoon
+                        ? "Switch to Gmail to generate with AI"
+                        : "Generate AI preview"
+                    }
+                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60 ${
+                      isComingSoon
+                        ? "bg-slate-400"
+                        : "bg-indigo-600 hover:bg-indigo-700"
+                    }`}
                   >
                     {isGenerating ? (
                       <>
@@ -590,14 +618,10 @@ export function MultiChannelBehavior() {
                     )}
                   </button>
 
-                  {generatedPreview && (
-                    <button
-                      onClick={() => setGeneratedPreview(null)}
-                      className="text-xs rounded-xl border border-slate-300 px-3 py-1.5 transition hover:bg-slate-50"
-                      title="Clear snapshot and return to live mode"
-                    >
-                      Reset
-                    </button>
+                  {isComingSoon && (
+                    <span className="text-xs rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800 ring-1 ring-amber-200">
+                      Slack / WhatsApp / Other — Coming soon
+                    </span>
                   )}
                 </div>
               </div>
@@ -608,8 +632,7 @@ export function MultiChannelBehavior() {
                   <p className="text-sm font-medium text-slate-700">Preview</p>
                   <button
                     onClick={() => {
-                      const textToCopy = generatedPreview ?? previewPlayground;
-                      navigator.clipboard.writeText(textToCopy);
+                      navigator.clipboard.writeText(previewForDisplay);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1200);
                     }}
@@ -628,14 +651,20 @@ export function MultiChannelBehavior() {
                 </div>
 
                 <pre className="mt-3 h-56 w-full overflow-auto rounded-xl bg-slate-900 p-4 text-[12px] leading-relaxed text-slate-100">
-                  {generatedPreview ?? previewPlayground}
+                  {previewForDisplay}
                 </pre>
 
-                <p className="mt-3 text-xs text-slate-500">
-                  Live preview updates as you type. Clicking{" "}
-                  <strong>Generate</strong> takes a snapshot; use <em>Reset</em>{" "}
-                  to go back to live mode.
-                </p>
+                {isComingSoon ? (
+                  <p className="mt-3 text-xs text-amber-700">
+                    <strong>Coming soon:</strong> full AI generation for{" "}
+                    {platformPlayground} will be enabled here.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Live preview updates as you type. Click{" "}
+                    <strong>Generate</strong> to fetch an AI draft.
+                  </p>
+                )}
               </div>
             </div>
           </Card>
